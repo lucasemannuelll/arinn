@@ -15,3 +15,7 @@ func (m *multiFlag) Set(v String) error {
 	*m = append(*m, v)
 	return nil
 }
+
+func main() {
+	// nothing yet
+}
