@@ -8,19 +8,20 @@ use clap::Parser;
 #[command(name = "arinn", version, about)]
 pub struct Args {
     /// Caminhos para repositórios (aceita também via pipe no stdin).
-    #[arg[value_name = "PATHS"]]
+    #[arg(value_name = "PATHS")]
     pub paths: Vec<PathBuf>,
 
     /// Início da janela (YYYY-MM-DD). Padrão: hoje - 365 dias.
     #[arg(long, value_name = "YYYY-MM-DD")]
-    pub since: Option(NaiveDate),
+    pub since: Option<NaiveDate>,
 
     /// Fim da janela (YYYY-MM-DD). Padrão: hoje.
     #[arg(long, value_name = "YYYY-MM-DD")]
-    pub until: Option(NaiveDate),
+    pub until: Option<NaiveDate>,
 
     /// Arquivo HTML de saída.
     #[arg(short, long, value_name = "FILE", default_value = "arinn.html")]
+    pub output: PathBuf,
 
     /// Lista cada repositório descoberto.
     #[arg(short, long)]

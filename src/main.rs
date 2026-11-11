@@ -4,7 +4,7 @@ mod input;
 
 use std::io::IsTerminal;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 fn main() -> Result<()> {
     let args = cli::parse();
