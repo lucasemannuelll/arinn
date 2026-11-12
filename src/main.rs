@@ -20,6 +20,7 @@ fn main() -> Result<()> {
     let (since, until) = cli::resolve_window(&args);
 
     if args.verbose {
+        eprintln!("janela: {since} ..= {until}");
         for r in &repos {
             println!("{}", r.display());
         }
@@ -36,7 +37,7 @@ fn main() -> Result<()> {
 
     let merged = commit::merge_maps(per_repo);
 
-    let local: u32 = merged.values().sum();
+    let total: u32 = merged.values().sum();
     println!("Total: {total} commits em {} dias distintos", merged.len());
     if args.verbose {
         for (d, n) in &merged {
