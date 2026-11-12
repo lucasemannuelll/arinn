@@ -17,12 +17,32 @@ fn main() -> Result<()> {
         anyhow::bail!("nenhum repositório válido encontrado");
     }
 
+    let (since, until) = cli::resolve_window(&args);
+
     if args.verbose {
         for r in &repos {
             println!("{}", r.display());
         }
     }
 
-    println!("Encontrados {} repos.", repos.len());
+    let mut per_repo: Vec<commit::BTreeMap<chrono::NaiveDate, u32>> = Vec::new();
+    for r in &repos {
+        let commits = commit::read_commits(r, since, until)?;
+        if args.verbose {
+            eprintln!("  {} commits", commits.len());
+        }
+        per_repo.push(commit::aggregate(&commits));
+    }
+
+    let merged = commit::merge_maps(per_repo);
+
+    let local: u32 = merged.values().sum();
+    println!("Total: {total} commits em {} dias distintos", merged.len());
+    if args.verbose {
+        for (d, n) in &merged {
+            println!("{d}: {n}")
+        }
+    }
+
     Ok(())
 }
