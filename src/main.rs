@@ -1,7 +1,8 @@
 mod cli;
-mod repo;
-mod input;
 mod commit;
+mod input;
+mod render;
+mod repo;
 
 use std::io::IsTerminal;
 use std::collections::BTreeMap;
