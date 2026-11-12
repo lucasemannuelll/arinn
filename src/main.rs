@@ -4,6 +4,7 @@ mod input;
 mod commit;
 
 use std::io::IsTerminal;
+use std::collections::BTreeMap;
 
 use anyhow::Result;
 
@@ -26,7 +27,7 @@ fn main() -> Result<()> {
         }
     }
 
-    let mut per_repo: Vec<commit::BTreeMap<chrono::NaiveDate, u32>> = Vec::new();
+    let mut per_repo: Vec<BTreeMap<chrono::NaiveDate, u32>> = Vec::new();
     for r in &repos {
         let commits = commit::read_commits(r, since, until)?;
         if args.verbose {

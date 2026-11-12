@@ -1,13 +1,10 @@
-use std::env::args;
-use std::{collections::BTreeMap, fmt::format};
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;
 
-use anyhow::{Context, Ok, Result};
+use anyhow::{Context, Result};
 use chrono::{DateTime, FixedOffset, NaiveDate};
-use clap::error::ContextValue::String;
 
-use crate::{commit, repo};
 
 #[derive(Debug, Clone)]
 pub struct Commit {
@@ -16,11 +13,11 @@ pub struct Commit {
 
 pub fn read_commits(repo: &Path, since: NaiveDate, until: NaiveDate) -> Result<Vec<Commit>> {
     let out = Command::new("git")
-        .arg("-c")
+        .arg("-C")
         .arg(repo)
         .arg("log")
         .arg("HEAD")
-        .arg(format!("--since={since}")))
+        .arg(format!("--since={since}"))
         .arg(format!("--until={until}"))
         .arg("--pretty=format:%aI")
         .output()
@@ -34,7 +31,7 @@ pub fn read_commits(repo: &Path, since: NaiveDate, until: NaiveDate) -> Result<V
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     let mut commits = Vec::new();
-    for line in stdout.line() {
+    for line in stdout.lines() {
         let line = line.trim();
         if line.is_empty() {
             continue;
