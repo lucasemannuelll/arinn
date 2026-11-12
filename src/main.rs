@@ -1,6 +1,7 @@
 mod cli;
 mod repo;
 mod input;
+mod commit;
 
 use std::io::IsTerminal;
 
