@@ -77,16 +77,63 @@ fn run_stats(
 
     let total_commits: u32 = v.iter().map(|(_, _, c)| c).sum();
 
+    let email_w = width_for(v.iter().map(|(e, _, _)| display_width(e)), display_width("email"), 60);
+    let name_w = width_for(v.iter().map(|(_, n, _)| display_width(n)), display_width("name"), 60);
+    let commits_w = 8;
+
     eprintln!();
     eprintln!("janela: {since} ..= {until}");
     eprintln!("repos: {}", repos.len());
     eprintln!("commits: {total_commits}");
     eprintln!();
-    eprintln!("{:<32} {:<24} {:>8}", "email", "name", "commits");
-    eprintln!("{:-<32} {:-<24} {:->8}", "", "", "");
+
+    eprintln!(
+        "{} {} {:>width$}",
+        pad_or_truncate("email", email_w),
+        pad_or_truncate("name", name_w),
+        "commits",
+        width = commits_w
+    );
+
+    eprintln!(
+        "{:-<email_w$} {:-<name_w$} {:->commits_w$}",
+        "", "", ""
+    );
+
     for (email, name, c) in &v {
-        eprintln!("{:<32} {:<24} {:>8}", email, name, c);
+        eprintln!(
+            "{} {} {:>width$}",
+            pad_or_truncate(email, email_w),
+            pad_or_truncate(name, name_w),
+            c,
+            width = commits_w
+        );
     }
 
     Ok(())
+}
+
+
+fn display_width(s: &str) -> usize {
+   s.chars().count() 
+}
+
+fn width_for(
+    items: impl Iterator<Item = usize>,
+    header: usize,
+    cap: usize,
+) -> usize {
+    items.chain(std::iter::once(header)).max().unwrap_or(0).min(cap)
+}
+
+fn pad_or_truncate(s: &str, width: usize) -> String {
+    let n = display_width(s);
+    if n <= width {
+        format!("{s}{}", " ".repeat(width - n))
+    } else {
+        let take = width.saturating_sub(1);
+        let mut t: String = s.chars().take(take).collect();
+        t.push('…');
+        t
+    }
 }
