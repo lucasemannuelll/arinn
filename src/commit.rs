@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;
 
-use anyhow::{Context, Ok, Result};
+use anyhow::{Context, Result};
 use chrono::{DateTime, NaiveDate};
 
 
@@ -13,7 +13,34 @@ pub struct Commit {
     pub date: NaiveDate,
 }
 
-// pub fn read_commits - apaguei para adicionar os proximo commandos (--author e --stats)
+pub fn read_commits(
+    repo: &Path,
+    since: NaiveDate,
+    until: NaiveDate,
+    authors: &[String],
+) -> Result<Vec<Commit>> {
+    let stdout = run_log(repo, since, until, authors)?;
+    let mut commits = Vec::new();
+
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        match parse_commit_line(line) {
+            Ok(c) => {
+                if c.date >= since && c.date <= until {
+                    commits.push(c);
+                }
+            }
+            Err(e) => {
+                eprintln!("aviso: linha de commit inválida em {}: {e}", repo.display());
+            }
+        }
+    }
+    Ok(commits)
+}
 
 fn run_log(repo: &Path, since: NaiveDate, until: NaiveDate, authors: &[String]) -> Result<String> {
     let mut cmd = Command::new("git");
@@ -53,7 +80,39 @@ fn parse_commit_line(line: &str) -> Result<Commit> {
     })
 }
 
-// pub fn author_stats(...) { ... };
+pub fn author_stats(
+    repo: &Path,
+    since: NaiveDate,
+    until: NaiveDate,
+    authors: &[String],
+) -> Result<Vec<(String, String, u32)>> {
+    let stdout = run_log(repo, since, until, authors)?;
+    let mut counts: BTreeMap<(String, String), u32> = BTreeMap::new();
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        match parse_commit_line(line) {
+            Ok(c) => {
+                if c.date >= since && c.date <= until {
+                    *counts.entry((c.email, c.name)).or_insert(0) += 1;
+                }
+            }
+
+            Err(_) => {}
+        }
+    }
+    let mut v: Vec<_> = counts
+    .into_iter()
+    .map(|((email, name), n)| (email, name, n))
+    .collect();
+
+    v.sort_by(|a, b| b.2.cmp(&a.2));
+
+    Ok(v)
+}
 
 pub fn aggregate(commits: &[Commit]) -> BTreeMap<NaiveDate, u32> {
     let mut map = BTreeMap::new();
