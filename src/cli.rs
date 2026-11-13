@@ -23,6 +23,14 @@ pub struct Args {
     #[arg(short, long, value_name = "FILE", default_value = "arinn.html")]
     pub output: PathBuf,
 
+    /// Filtra commits por autor (substring ou regex). Repetível.
+    #[arg(long, value_name = "PATTERN")]
+    pub authors: Vec<String>,
+
+    /// Mostra estatísticas de autores por repo (em stderr) e sai sem gerar HTML.
+    #[arg(long)]
+    pub stats: bool,
+
     /// Lista cada repositório descoberto.
     #[arg(short, long)]
     pub verbose: bool,
