@@ -50,7 +50,7 @@ fn run_log(repo: &Path, since: NaiveDate, until: NaiveDate, authors: &[String]) 
         .arg("HEAD")
         .arg(format!("--since={since}"))
         .arg(format!("--until={until}"))
-        .arg("--pretty=format:%ae%x1f%an%x1f%aI");
+        .arg("--pretty=format:%aE%x1f%aN%x1f%aI");
 
     for a in authors {
         cmd.arg(format!("--author={a}"));
