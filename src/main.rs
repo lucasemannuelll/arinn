@@ -7,7 +7,7 @@ mod repo;
 use std::io::IsTerminal;
 use std::collections::BTreeMap;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 fn main() -> Result<()> {
     let args = cli::parse();
@@ -39,13 +39,11 @@ fn main() -> Result<()> {
 
     let merged = commit::merge_maps(per_repo);
 
-    let total: u32 = merged.values().sum();
-    println!("Total: {total} commits em {} dias distintos", merged.len());
-    if args.verbose {
-        for (d, n) in &merged {
-            println!("{d}: {n}")
-        }
-    }
+    let html = render::render(&merged, since, until, repos.len());
+    std::fs::write(&args.output, html)
+        .with_context(|| format!("falha ao escrever {}", args.output.display()))?;
+
+    println!("escrito em {}", args.output.display());
 
     Ok(())
 }
