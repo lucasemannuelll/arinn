@@ -39,7 +39,8 @@ fn main() -> Result<()> {
 
     let merged = commit::merge_maps(per_repo);
 
-    let html = render::render(&merged, since, until, repos.len());
+    let html = render::render(&merged, since, until, &repos);
+    
     std::fs::write(&args.output, html)
         .with_context(|| format!("falha ao escrever {}", args.output.display()))?;
 
