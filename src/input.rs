@@ -6,16 +6,11 @@ use anyhow::{bail, Result};
 use crate::cli::Args;
 use crate::repo;
 
-/// Decide a fonte (args vs stdin) e 
+/// Decide a fonte (args vs stdin) e
 /// devolve a lista de repos normalizada e deduplicada.
-pub fn resolve_paths(
-    args: &Args, stdin_is_pipe: bool
-) -> Result<Vec<PathBuf>> {
+pub fn resolve_paths(args: &Args, stdin_is_pipe: bool) -> Result<Vec<PathBuf>> {
     let input_paths: Vec<String> = if !args.paths.is_empty() {
-        args.paths
-            .iter()
-            .map(|p| p.display().to_string())
-            .collect()
+        args.paths.iter().map(|p| p.display().to_string()).collect()
     } else if stdin_is_pipe {
         read_stdin_lines()?
     } else {
@@ -36,14 +31,12 @@ pub fn resolve_paths(
                     );
                     continue;
                 }
-                let canonical_path = repo
-                    .canonicalize()
-                    .unwrap_or(repo.clone());
+                let canonical_path = repo.canonicalize().unwrap_or(repo.clone());
 
-                if !resolved_paths.iter()
-                        .any(|e| e.canonicalize()
-                        .ok()
-                        .as_ref() == Some(&canonical_path)) {
+                if !resolved_paths
+                    .iter()
+                    .any(|e| e.canonicalize().ok().as_ref() == Some(&canonical_path))
+                {
                     resolved_paths.push(repo);
                 }
             }
@@ -58,13 +51,12 @@ pub fn resolve_paths(
     Ok(resolved_paths)
 }
 
-
 fn read_stdin_lines() -> Result<Vec<String>> {
     let stdin = std::io::stdin();
     let mut stdin_lock = stdin.lock();
     let mut stdin_buffer = String::new();
 
     stdin_lock.read_to_string(&mut stdin_buffer)?;
-    
+
     Ok(stdin_buffer.lines().map(str::to_string).collect())
 }
