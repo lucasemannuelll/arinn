@@ -4,9 +4,9 @@ use std::path::PathBuf;
 
 use chrono::{Datelike, Duration, NaiveDate};
 
-const CELL: i32 = 11;
-const GAP: i32 = 2;
-const STEP: i32 = CELL + GAP;
+const CELL_SIZE: i32 = 11;
+const GAP_SIZE: i32 = 2;
+const STEP: i32 = CELL_SIZE + GAP_SIZE;
 const MARGIN_LEFT: i32 = 30;
 const MARGIN_TOP: i32 = 20;
 const MARGIN_RIGHT: i32 = 10;
@@ -16,9 +16,9 @@ const MARGIN_BOTTOM: i32 = 30;
 const BG: &str = "#0d1117";
 const FG: &str = "#c9d1d9";
 const FG_MUTED: &str = "#8b949e";
-const BORDER: &str = "#30363d";
+const BORDER_COLOR: &str = "#30363d";
 
-const COLORS: [&str; 5] = [
+const CONTRIBUTION_COLORS: [&str; 5] = [
     "#161b22", // 0 — célula vazia
     "#0e4429", // 1–3
     "#006d32", // 4–9
@@ -37,35 +37,39 @@ const MONTHS: [&str; 12] = [
 ];
 
 pub fn render(
-    data: &BTreeMap<NaiveDate, u32>,
+    daily_commit_count: &BTreeMap<NaiveDate, u32>,
     since: NaiveDate,
     until: NaiveDate,
     repos: &[PathBuf],
 ) -> String {
-    let grid_start = since - Duration::days(
+    let grid_start_date = since - Duration::days(
         since.weekday().num_days_from_sunday() as i64
     );
-    let days_to_sat = 6 - until.weekday().num_days_from_sunday() as i64;
-    let grid_end = until + Duration::days(days_to_sat);
+    let days_until_saturday = 6 - until
+        .weekday()
+        .num_days_from_sunday() as i64;
+    let grid_end_date = until + Duration::days(days_until_saturday);
 
-    let total_days = (grid_end - grid_start).num_days() as i32 + 1;
-    let weeks = (total_days + 6) / 7;
+    let grid_total_days = (grid_end_date - grid_start_date)
+        .num_days() as i32 + 1;
 
-    let grid_w = weeks * STEP - GAP;
-    let grid_h = 7 * STEP - GAP;
+    let week_count = (grid_total_days + 6) / 7;
 
-    let svg_w = MARGIN_LEFT + grid_w + MARGIN_RIGHT;
-    let svg_h = MARGIN_TOP + grid_h + MARGIN_BOTTOM;
+    let grid_width = week_count * STEP - GAP_SIZE;
+    let grid_height = 7 * STEP - GAP_SIZE;
 
-    let mut svg = String::new();
+    let svg_width = MARGIN_LEFT + grid_width + MARGIN_RIGHT;
+    let svg_height = MARGIN_TOP + grid_height + MARGIN_BOTTOM;
+
+    let mut svg_content = String::new();
 
     writeln!(
-        svg,
-        r##"<svg xmlns="http://www.w3.org/2000/svg" width="{svg_w}" height="{svg_h}" viewBox="0 0 {svg_w} {svg_h}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10">"##
+        svg_content,
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="{svg_width}" height="{svg_height}" viewBox="0 0 {svg_width} {svg_height}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10">"##
     ).unwrap();
 
     writeln!(
-        svg,
+        svg_content,
         r##"<style>
 rect.cell {{ 
   transition: stroke .1s, stroke-width .1s;
@@ -77,15 +81,31 @@ rect.cell:hover {{
 </style>"##
     ).unwrap();
 
-    draw_month_labels(&mut svg, grid_start, weeks);
-    draw_day_labels(&mut svg);
-    draw_cells(&mut svg, data, grid_start, grid_end, since, until);
-    draw_legend(&mut svg, svg_w, svg_h, repos.is_empty(), data);
-    draw_footer(&mut svg, since, until, data, svg_h);
+    draw_month_labels(&mut svg_content, grid_start_date, week_count);
+    draw_day_labels(&mut svg_content);
 
-    svg.push_str("</svg>\n");
+    draw_cells(
+        &mut svg_content,
+        daily_commit_count,
+        grid_start_date,
+        grid_end_date,
+        since,
+        until
+    );
 
-    let total: u32 = data.values().sum();
+    draw_legend(
+        &mut svg_content,
+        svg_width,
+        svg_height,
+        repos.is_empty(),
+        daily_commit_count
+    );
+
+    draw_footer(&mut svg_content, since, until, daily_commit_count, svg_height);
+
+    svg_content.push_str("</svg>\n");
+
+    let total_commits: u32 = daily_commit_count.values().sum();
 
     let repos_html = render_repos_panel(repos);
 
@@ -94,7 +114,7 @@ rect.cell:hover {{
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>arinn — {total} commits</title>
+<title>arinn — {total_commits} commits</title>
 <style>
   body {{
     margin: 0;
@@ -135,60 +155,63 @@ rect.cell:hover {{
 </style>
 </head>
 <body>
-  <h1>arinn — {total} commits</h1>
-  {repos_html}<div class="wrap">{svg}</div>
+  <h1>arinn — {total_commits} commits</h1>
+  {repos_html}<div class="wrap">{svg_content}</div>
 </body>
 </html>
 "##
     )
 }
 
-fn html_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&#39;"),
-            _ => out.push(c),
+fn html_escape(input: &str) -> String {
+    let mut escaped = String::with_capacity(input.len());
+    for char in input.chars() {
+        match char {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            '"' => escaped.push_str("&quot;"),
+            '\'' => escaped.push_str("&#39;"),
+            _ => escaped.push(char),
         }
     }
-    out
+    escaped
 }
 
 fn render_repos_panel(repos: &[PathBuf]) -> String {
     if repos.is_empty() {
         return String::new();
     }
-    let n = repos.len();
-    let summary = if n == 1 {
+    let repo_count = repos.len();
+    let summary = if repo_count == 1 {
         "1 repo".to_string()
     } else {
-        format!("{n} repos")
+        format!("{repo_count} repos")
     };
     
-    let open = if n == 1 { " open" } else { "" };
+    let open_attribute = if repo_count == 1 { " open" } else { "" };
 
-    let mut items = String::new();
-    for r in repos {
-        let name = r
+    let mut repo_items = String::new();
+    for repo in repos {
+        let repo_name = repo
             .file_name()
             .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_else(|| r.display().to_string());
+            .unwrap_or_else(|| repo.display().to_string());
 
-        let s = html_escape(&name);
-        let title = html_escape(&r.display().to_string());
-        writeln!(items, r##"<li title="{title}">{s}</li>"##).unwrap();
+        let escaped_name = html_escape(&repo_name);
+        let escaped_path = html_escape(&repo.display().to_string());
+
+        writeln!(
+            repo_items, r##"<li title="{escaped_path}">{escaped_name}</li>"##
+        ).unwrap();
     }
 
     format!(
         r##"
-  <div class="repos">
-  <details{open}>
+<div class="repos">
+  <details{open_attribute}>
     <summary>{summary}</summary>
-    <ul>{items}</ul>
+    <ul>{repo_items}</ul>
   </details>
 </div>
 "##
@@ -196,8 +219,8 @@ fn render_repos_panel(repos: &[PathBuf]) -> String {
 }
 
 
-fn bucket(n: u32) -> usize {
-    match n {
+fn contribution_level(commit_count: u32) -> usize {
+    match commit_count {
         0 => 0,
         1..=3 => 1,
         4..=9 => 2,
@@ -206,118 +229,143 @@ fn bucket(n: u32) -> usize {
     }
 }
 
-fn draw_month_labels(out: &mut String, grid_start: NaiveDate, weeks: i32) {
-    let mut last_month: Option<u32> = None;
-    for w in 0..weeks {
-        let week_date = grid_start + Duration::days((w * 7) as i64);
-        let m = week_date.month0();
-        if Some(m) != last_month {
-            let x = MARGIN_LEFT + w * STEP;
-            let y = MARGIN_TOP - 6;
+fn draw_month_labels(
+    svg_content: &mut String, grid_start_date: NaiveDate, week_count: i32
+) {
+    let mut previous_month: Option<u32> = None;
+    for week in 0..week_count {
+        let week_start_date = grid_start_date + Duration::days(
+            (week * 7) as i64
+        );
+
+        let month = week_start_date.month0();
+
+        if Some(month) != previous_month {
+            let label_x = MARGIN_LEFT + week * STEP;
+            let label_y = MARGIN_TOP - 6;
             writeln!(
-                out,
-                r##"<text x="{x}" y="{y}" fill="{FG_MUTED}">{}</text>"##,
-                MONTHS[m as usize]
+                svg_content,
+                r##"<text x="{label_x}" y="{label_y}" fill="{FG_MUTED}">{}</text>"##,
+                MONTHS[month as usize]
             )
             .unwrap();
-            last_month = Some(m);
+            previous_month = Some(month);
         }
     }
 }
 
-fn draw_day_labels(out: &mut String) {
-    for (row, name) in WEEKDAYS_LABELS {
-        let x = MARGIN_LEFT - 6;
-        let y = MARGIN_TOP + row as i32 * STEP + CELL - 2;
+fn draw_day_labels(svg_content: &mut String) {
+    for (row, weekday) in WEEKDAYS_LABELS {
+        let label_x = MARGIN_LEFT - 6;
+        let label_y = MARGIN_TOP + row as i32 * STEP + CELL_SIZE - 2;
         writeln!(
-            out,
-            r##"<text x="{x}" y="{y}" fill="{FG_MUTED}" text-anchor="end">{name}</text>"##
+            svg_content,
+            r##"<text x="{label_x}" y="{label_y}" fill="{FG_MUTED}" text-anchor="end">{weekday}</text>"##
         )
         .unwrap();
     }
 }
 
 fn draw_cells(
-    out: &mut String,
-    data: &BTreeMap<NaiveDate, u32>,
-    grid_start: NaiveDate,
-    grid_end: NaiveDate,
+    svg_content: &mut String,
+    daily_commit_count: &BTreeMap<NaiveDate, u32>,
+    grid_start_date: NaiveDate,
+    grid_end_date: NaiveDate,
     since: NaiveDate,
     until: NaiveDate,
 ) {
-    let mut day = grid_start;
-    let mut idx = 0i32;
-    while day <= grid_end {
-        let col = idx / 7;
-        let row = idx % 7;
-        let x = MARGIN_LEFT + col * STEP;
-        let y = MARGIN_TOP + row * STEP;
+    let mut current_date = grid_start_date;
+    let mut day_offset = 0i32;
 
-        let in_window = day >= since && day <= until;
-        let n = if in_window { *data.get(&day).unwrap_or(&0) } else { 0 };
-        let fill = COLORS[bucket(n)];
+    while current_date <= grid_end_date {
+        let col = day_offset / 7;
+        let row = day_offset % 7;
+        let cell_x = MARGIN_LEFT + col * STEP;
+        let cell_y = MARGIN_TOP + row * STEP;
 
-        if in_window {
-            let plural = if n == 1 { "commit" } else { "commits" };
+        let is_in_date_range = current_date >= since && current_date <= until;
+        
+        let commit_count = if is_in_date_range {
+            *daily_commit_count
+                .get(&current_date)
+                .unwrap_or(&0) 
+        } else { 0 };
+
+        let cell_color = CONTRIBUTION_COLORS[contribution_level(commit_count)];
+
+        if is_in_date_range {
+            let commit_label = if commit_count == 1 { 
+                "commit" 
+            } else { "commits" };
+
             writeln!(
-                out,
-                r##"<rect class="cell" x="{x}" y="{y}" width="{CELL}" height="{CELL}" rx="2" ry="2" fill="{fill}"><title>{n} {plural} em {day}</title></rect>"##
+                svg_content,
+                r##"<rect class="cell" x="{cell_x}" y="{cell_y}" width="{CELL_SIZE}" height="{CELL_SIZE}" rx="2" ry="2" fill="{cell_color}"><title>{commit_count} {commit_label} em {current_date}</title></rect>"##
             ).unwrap();
         } else {
             writeln!(
-                out,
-                r##"<rect x="{x}" y="{y}" width="{CELL}" height="{CELL}" rx="2" ry="2" fill="{}"/>"##, COLORS[0]).unwrap();
+                svg_content,
+                r##"<rect x="{cell_x}" y="{cell_y}" width="{CELL_SIZE}" height="{CELL_SIZE}" rx="2" ry="2" fill="{}"/>"##, CONTRIBUTION_COLORS[0]).unwrap();
         }
 
-        day += Duration::days(1);
-        idx += 1;
+        current_date += Duration::days(1);
+        day_offset += 1;
     }
 }
 
-fn draw_legend(out: &mut String, svg_w: i32, svg_h: i32, repos_empty: bool, data: &BTreeMap<NaiveDate, u32>) {
-    let cell = CELL;
-    let gap = 3;
-    let legend_w = 5 * (cell + gap) - gap;
-    let x0 = svg_w - MARGIN_RIGHT - legend_w - 50;
-    let y0 = svg_h - MARGIN_BOTTOM + 8;
+fn draw_legend(
+    svg_content: &mut String, 
+    svg_width: i32, 
+    svg_height: i32, 
+    repos_empty: bool, 
+    daily_commit_count: &BTreeMap<NaiveDate, u32>
+) {
+    let cell_size = CELL_SIZE;
+    let cell_gap = 3;
+    let legend_width = 5 * (cell_size + cell_gap) - cell_gap;
+    let legend_x = svg_width - MARGIN_RIGHT - legend_width - 50;
+    let legend_y = svg_height - MARGIN_BOTTOM + 8;
 
     writeln!(
-        out,
-        r##"<text x="{x0}" y="{}" fill="{FG_MUTED}" text-anchor="end">Less</text>"##,
-        y0 + cell - 2
+        svg_content,
+        r##"<text x="{legend_x}" y="{}" fill="{FG_MUTED}" text-anchor="end">Less</text>"##,
+        legend_y + cell_size - 2
     ).unwrap();
 
-    for (i, color) in COLORS.iter().enumerate() {
-        let x = x0 + 10 + i as i32 * (cell + gap);
+    for (i, color) in CONTRIBUTION_COLORS.iter().enumerate() {
+        let cell_x = legend_x + 10 + i as i32 * (cell_size + cell_gap);
         writeln!(
-            out,
-            r##"<rect x="{x}" y="{y0}" width="{cell}" height="{cell}" rx="2" ry="2" fill="{color}" stroke="{BORDER}" stroke-width="1"/>"##
+            svg_content,
+            r##"<rect x="{cell_x}" y="{legend_y}" width="{cell_size}" height="{cell_size}" rx="2" ry="2" fill="{color}" stroke="{BORDER_COLOR}" stroke-width="1"/>"##
         ).unwrap();
     }
 
-    let more_x = x0 + 10 + 5 * (cell + gap) + 6;
+    let more_label_x = legend_x + 10 + 5 * (cell_size + cell_gap) + 6;
     writeln!(
-        out,
-        r##"<text x="{more_x}" y="{}" fill="{FG_MUTED}">More</text>"##,
-        y0 + cell - 2
+        svg_content,
+        r##"<text x="{more_label_x}" y="{}" fill="{FG_MUTED}">More</text>"##,
+        legend_y + cell_size - 2
     ).unwrap();
 
-    let _ = (repos_empty, data);
+    let _ = (repos_empty, daily_commit_count);
 }
 
 fn draw_footer(
-    out: &mut String, 
+    svg_content: &mut String, 
     since: NaiveDate, 
     until: NaiveDate, 
-    data: &BTreeMap<NaiveDate, u32>, 
-    svg_h: i32
+    daily_commit_count: &BTreeMap<NaiveDate, u32>, 
+    svg_height: i32
 ) {
-    let total: u32 = data.values().sum();
-    let text = format!("{since} → {until} · {total} commits");
-    let x = MARGIN_LEFT;
-    let y = svg_h - 6;
+    let total_commits: u32 = daily_commit_count.values().sum();
+    let footer_text = format!(
+        "{since} → {until} · {total_commits} commits"
+    );
+    let footer_x = MARGIN_LEFT;
+    let footer_y = svg_height - 6;
+
     writeln!(
-        out,
-        r##"<text x="{x}" y="{y}" fill="{FG_MUTED}">{text}</text>"##
+        svg_content,
+        r##"<text x="{footer_x}" y="{footer_y}" fill="{FG_MUTED}">{footer_text}</text>"##
     ).unwrap();
 }

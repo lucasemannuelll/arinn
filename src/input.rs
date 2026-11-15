@@ -11,7 +11,7 @@ use crate::repo;
 pub fn resolve_paths(
     args: &Args, stdin_is_pipe: bool
 ) -> Result<Vec<PathBuf>> {
-    let raw: Vec<String> = if !args.paths.is_empty() {
+    let input_paths: Vec<String> = if !args.paths.is_empty() {
         args.paths
             .iter()
             .map(|p| p.display().to_string())
@@ -25,41 +25,46 @@ pub fn resolve_paths(
         );
     };
 
-    let mut out: Vec<PathBuf> = Vec::new();
-    for line in raw {
-        match repo::normalize_path(&line) {
-            Some(p) => {
-                if !repo::is_git_repo(&p) {
+    let mut resolved_paths: Vec<PathBuf> = Vec::new();
+    for input_path in input_paths {
+        match repo::normalize_path(&input_path) {
+            Some(repo) => {
+                if !repo::is_git_repo(&repo) {
                     eprintln!(
                         "aviso: {} não parece um repositório git; ignorando",
-                        p.display()
+                        repo.display()
                     );
                     continue;
                 }
-                let canon = p.canonicalize().unwrap_or(p.clone());
-                if !out.iter()
+                let canonical_path = repo
+                    .canonicalize()
+                    .unwrap_or(repo.clone());
+
+                if !resolved_paths.iter()
                         .any(|e| e.canonicalize()
                         .ok()
-                        .as_ref() == Some(&canon)) {
-                    out.push(p);
+                        .as_ref() == Some(&canonical_path)) {
+                    resolved_paths.push(repo);
                 }
             }
             None => {
-                let t = line.trim();
-                if !t.is_empty() {
-                    eprintln!("aviso: caminho inválido ou inexistente: {t}");
+                let trimmed_path = input_path.trim();
+                if !trimmed_path.is_empty() {
+                    eprintln!("aviso: caminho inválido ou inexistente: {trimmed_path}");
                 }
             }
         }
     }
-    Ok(out)
+    Ok(resolved_paths)
 }
 
 
 fn read_stdin_lines() -> Result<Vec<String>> {
     let stdin = std::io::stdin();
-    let mut lock = stdin.lock();
-    let mut buf = String::new();
-    lock.read_to_string(&mut buf)?;
-    Ok(buf.lines().map(str::to_string).collect())
+    let mut stdin_lock = stdin.lock();
+    let mut stdin_buffer = String::new();
+
+    stdin_lock.read_to_string(&mut stdin_buffer)?;
+    
+    Ok(stdin_buffer.lines().map(str::to_string).collect())
 }
