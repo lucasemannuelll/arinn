@@ -6,14 +6,23 @@ use anyhow::{bail, Result};
 use crate::cli::Args;
 use crate::repo;
 
-/// Decide a fonte (args vs stdin) e devolve a lista de repos normalizada e deduplicada.
-pub fn resolve_paths(args: &Args, stdin_is_pipe: bool) -> Result<Vec<PathBuf>> {
+/// Decide a fonte (args vs stdin) e 
+/// devolve a lista de repos normalizada e deduplicada.
+pub fn resolve_paths(
+    args: &Args, stdin_is_pipe: bool
+) -> Result<Vec<PathBuf>> {
     let raw: Vec<String> = if !args.paths.is_empty() {
-        args.paths.iter().map(|p| p.display().to_string()).collect()
+        args.paths
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect()
     } else if stdin_is_pipe {
         read_stdin_lines()?
     } else {
-        bail!("nenhum repositório fornecido (passe caminhos como argumentos ou via pipe)");
+        bail!(
+            "nenhum repositório fornecido \
+            (passe caminhos como argumentos ou via pipe)"
+        );
     };
 
     let mut out: Vec<PathBuf> = Vec::new();
@@ -21,11 +30,17 @@ pub fn resolve_paths(args: &Args, stdin_is_pipe: bool) -> Result<Vec<PathBuf>> {
         match repo::normalize_path(&line) {
             Some(p) => {
                 if !repo::is_git_repo(&p) {
-                    eprintln!("aviso: {} não parece um repositório git; ignorando", p.display());
+                    eprintln!(
+                        "aviso: {} não parece um repositório git; ignorando",
+                        p.display()
+                    );
                     continue;
                 }
                 let canon = p.canonicalize().unwrap_or(p.clone());
-                if !out.iter().any(|e| e.canonicalize().ok().as_ref() == Some(&canon)) {
+                if !out.iter()
+                        .any(|e| e.canonicalize()
+                        .ok()
+                        .as_ref() == Some(&canon)) {
                     out.push(p);
                 }
             }

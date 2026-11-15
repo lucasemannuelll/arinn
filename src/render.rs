@@ -26,7 +26,11 @@ const COLORS: [&str; 5] = [
     "#39d353", // 20+
 ];
 
-const WEEKDAYS_LABELS: [(usize, &str); 3] = [(1, "Mon"), (3, "Wed"), (5, "Fri")];
+const WEEKDAYS_LABELS: [(usize, &str); 3] = [
+    (1, "Mon"),
+    (3, "Wed"),
+    (5, "Fri")
+];
 const MONTHS: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
@@ -38,7 +42,9 @@ pub fn render(
     until: NaiveDate,
     repos: &[PathBuf],
 ) -> String {
-    let grid_start = since - Duration::days(since.weekday().num_days_from_sunday() as i64);
+    let grid_start = since - Duration::days(
+        since.weekday().num_days_from_sunday() as i64
+    );
     let days_to_sat = 6 - until.weekday().num_days_from_sunday() as i64;
     let grid_end = until + Duration::days(days_to_sat);
 
@@ -61,8 +67,13 @@ pub fn render(
     writeln!(
         svg,
         r##"<style>
-  rect.cell {{ transition: stroke .1s, stroke-width .1s; }}
-  rect.cell:hover {{ stroke: #ffffff; stroke-width: 1.5; }}
+rect.cell {{ 
+  transition: stroke .1s, stroke-width .1s;
+}}
+rect.cell:hover {{ 
+  stroke: #ffffff; 
+  stroke-width: 1.5; 
+}}
 </style>"##
     ).unwrap();
 
@@ -124,9 +135,8 @@ pub fn render(
 </style>
 </head>
 <body>
-<h1>arinn — {total} commits</h1>
-{repos_html}<div class="wrap">
-{svg}</div>
+  <h1>arinn — {total} commits</h1>
+  {repos_html}<div class="wrap">{svg}</div>
 </body>
 </html>
 "##
@@ -295,7 +305,13 @@ fn draw_legend(out: &mut String, svg_w: i32, svg_h: i32, repos_empty: bool, data
     let _ = (repos_empty, data);
 }
 
-fn draw_footer(out: &mut String, since: NaiveDate, until: NaiveDate, data: &BTreeMap<NaiveDate, u32>, svg_h: i32) {
+fn draw_footer(
+    out: &mut String, 
+    since: NaiveDate, 
+    until: NaiveDate, 
+    data: &BTreeMap<NaiveDate, u32>, 
+    svg_h: i32
+) {
     let total: u32 = data.values().sum();
     let text = format!("{since} → {until} · {total} commits");
     let x = MARGIN_LEFT;

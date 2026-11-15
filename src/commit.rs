@@ -35,14 +35,22 @@ pub fn read_commits(
                 }
             }
             Err(e) => {
-                eprintln!("aviso: linha de commit inválida em {}: {e}", repo.display());
+                eprintln!(
+                    "aviso: linha de commit inválida em {}: {e}",
+                    repo.display()
+                );
             }
         }
     }
     Ok(commits)
 }
 
-fn run_log(repo: &Path, since: NaiveDate, until: NaiveDate, authors: &[String]) -> Result<String> {
+fn run_log(
+    repo: &Path, 
+    since: NaiveDate, 
+    until: NaiveDate, 
+    authors: &[String]
+) -> Result<String> {
     let mut cmd = Command::new("git");
     cmd.arg("-C")
         .arg(repo)
@@ -55,11 +63,16 @@ fn run_log(repo: &Path, since: NaiveDate, until: NaiveDate, authors: &[String]) 
     for a in authors {
         cmd.arg(format!("--author={a}"));
     }
-    let out = cmd.output().with_context(|| format!("falha ao invocar git em {}", repo.display()))?;
+
+    let out = cmd.output().with_context(|| {
+        format!("falha ao invocar git em {}", repo.display())
+    })?;
 
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
-        eprintln!("aviso: git log falhou em {}: {}", repo.display(), stderr.trim());
+        eprintln!(
+            "aviso: git log falhou em {}: {}", repo.display(), stderr.trim()
+        );
         return Ok(String::new());
     }
 
@@ -122,7 +135,9 @@ pub fn aggregate(commits: &[Commit]) -> BTreeMap<NaiveDate, u32> {
     map
 }
 
-pub fn merge_maps(maps: impl IntoIterator<Item = BTreeMap<NaiveDate, u32>>) -> BTreeMap<NaiveDate, u32> {
+pub fn merge_maps(
+    maps: impl IntoIterator<Item = BTreeMap<NaiveDate, u32>>
+) -> BTreeMap<NaiveDate, u32> {
     let mut acc: BTreeMap<NaiveDate, u32> = BTreeMap::new();
     for m in maps {
         for (d, n) in m {

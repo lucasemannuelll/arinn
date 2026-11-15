@@ -27,7 +27,7 @@ pub struct Args {
     #[arg(long, value_name = "PATTERN")]
     pub authors: Vec<String>,
 
-    /// Mostra estatísticas de autores por repo (em stderr) e sai sem gerar HTML.
+    /// Mostra stats de autores por repo (em stderr) e sai sem gerar HTML.
     #[arg(long)]
     pub stats: bool,
 

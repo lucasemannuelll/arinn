@@ -5,6 +5,7 @@ mod render;
 mod repo;
 
 use std::collections::BTreeMap;
+use std::fs;
 use std::io::IsTerminal;
 
 use anyhow::{Context, Result};
@@ -46,8 +47,10 @@ fn main() -> Result<()> {
 
     let html = render::render(&merged, since, until, &repos);
 
-    std::fs::write(&args.output, html)
-        .with_context(|| format!("falha ao escrever {}", args.output.display()))?;
+    fs::write(&args.output, html)
+        .with_context(|| format!(
+            "falha ao escrever {}", args.output.display()
+        ))?;
 
     println!("escrito em {}", args.output.display());
 
@@ -72,13 +75,25 @@ fn run_stats(
         }
     }
 
-    let mut v: Vec<_> = total.into_iter().map(|((e, n), c)| (e, n, c)).collect();
+    let mut v: Vec<_> = total
+        .into_iter()
+        .map(|((e, n), c)| (e, n, c))
+        .collect();
+
     v.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| a.0.cmp(&b.0)));
 
     let total_commits: u32 = v.iter().map(|(_, _, c)| c).sum();
 
-    let email_w = width_for(v.iter().map(|(e, _, _)| display_width(e)), display_width("email"), 60);
-    let name_w = width_for(v.iter().map(|(_, n, _)| display_width(n)), display_width("name"), 60);
+    let email_w = width_for(
+        v.iter().map(|(e, _, _)| display_width(e)),
+        display_width("email"),
+        60,
+    );
+    let name_w = width_for(
+        v.iter().map(|(_, n, _)| display_width(n)),
+        display_width("name"),
+        60,
+    );
     let commits_w = 8;
 
     eprintln!();
@@ -95,10 +110,7 @@ fn run_stats(
         width = commits_w
     );
 
-    eprintln!(
-        "{:-<email_w$} {:-<name_w$} {:->commits_w$}",
-        "", "", ""
-    );
+    eprintln!("{:-<email_w$} {:-<name_w$} {:->commits_w$}", "", "", "");
 
     for (email, name, c) in &v {
         eprintln!(
@@ -113,17 +125,18 @@ fn run_stats(
     Ok(())
 }
 
-
 fn display_width(s: &str) -> usize {
-   s.chars().count() 
+    s.chars().count()
 }
 
 fn width_for(
-    items: impl Iterator<Item = usize>,
-    header: usize,
-    cap: usize,
+    items: impl Iterator<Item = usize>, header: usize, cap: usize
 ) -> usize {
-    items.chain(std::iter::once(header)).max().unwrap_or(0).min(cap)
+    items
+        .chain(std::iter::once(header))
+        .max()
+        .unwrap_or(0)
+        .min(cap)
 }
 
 fn pad_or_truncate(s: &str, width: usize) -> String {
