@@ -15,7 +15,9 @@ use chrono::NaiveDate;
 fn main() -> Result<()> {
     let args = cli::parse();
 
-    let stdin_is_pipe = !std::io::stdin().is_terminal();
+    let stdin_is_pipe = !std::io::stdin()
+        .is_terminal();
+
     let repos = input::resolve_paths(&args, stdin_is_pipe)?;
 
     if repos.is_empty() {
@@ -36,30 +38,31 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let mut repo_commit_count: Vec<BTreeMap<NaiveDate, u32>> = Vec::new();
+    let mut repo_day_stats = Vec::new();
 
     for repo in &repos {
-        let commits = commit::read_commits(
-            repo, since, until, &args.authors
-        )?;
+        let commits = commit::read_commits(repo, since, until, &args.authors)?;
 
         if args.verbose {
             eprintln!("  {} commits", commits.len());
         }
 
-        repo_commit_count.push(commit::aggregate(&commits));
+        let repo_name = repo
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| repo.display().to_string());
+
+        repo_day_stats
+            .push((repo_name, commit::repo_day_stats(&commits)));
     }
 
-    let merged_commit_count = commit::merge_maps(repo_commit_count);
+    let day_buckets = commit::merge_day_buckets(repo_day_stats);
+    let merged_commit_count = commit::total_by_day(&day_buckets);
 
-    let html_render = render::render(
-        &merged_commit_count, since, until, &repos
-    );
+    let html_render = render::render(&merged_commit_count, since, until, &repos);
 
     fs::write(&args.output, html_render)
-        .with_context(|| format!(
-            "falha ao escrever {}", args.output.display()
-        ))?;
+        .with_context(|| format!("falha ao escrever {}", args.output.display()))?;
 
     println!("escrito em {}", args.output.display());
 
@@ -72,14 +75,10 @@ fn run_stats(
     since: NaiveDate,
     until: NaiveDate,
 ) -> Result<()> {
-    let mut author_commit_total: BTreeMap<
-        (String, String), u32
-    > = BTreeMap::new();
+    let mut author_commit_total: BTreeMap<(String, String), u32> = BTreeMap::new();
 
     for repo in repos {
-        let author_stats = commit::author_stats(
-            repo, since, until, &args.authors
-        )?;
+        let author_stats = commit::author_stats(repo, since, until, &args.authors)?;
 
         for (email, name, commit_count) in author_stats {
             if args.verbose {
@@ -96,9 +95,7 @@ fn run_stats(
         .map(|((e, n), c)| (e, n, c))
         .collect();
 
-    sorted_author_stats.sort_by(
-        |a, b| b.2.cmp(&a.2).then_with(|| a.0.cmp(&b.0))
-    );
+    sorted_author_stats.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| a.0.cmp(&b.0)));
 
     let total_commits: u32 = sorted_author_stats
         .iter()
@@ -173,7 +170,8 @@ fn pad_or_truncate(text: &str, column_width: usize) -> String {
     if text_width <= column_width {
         format!("{text}{}", " ".repeat(column_width - text_width))
     } else {
-        let truncated_width = column_width.saturating_sub(1);
+        let truncated_width = column_width
+            .saturating_sub(1);
 
         let mut truncated_text: String = text
             .chars()
