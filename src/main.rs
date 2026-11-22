@@ -5,8 +5,8 @@ mod render;
 mod repo;
 
 use std::collections::BTreeMap;
-use std::io::IsTerminal;
 use std::fs;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 
 use chrono::NaiveDate;
@@ -39,14 +39,12 @@ fn main() -> Result<()> {
     }
 
     let repo_day_stats = Vec::new();
-    
+
     let day_buckets = commit::merge_day_buckets(repo_day_stats);
     let merged_commit_count = commit::total_by_day(&day_buckets);
     let repo_totals = commit::totals_by_repo(&day_buckets);
 
-    let html_render = render::render(
-        &merged_commit_count, since, until, &repos, &repo_totals
-    );
+    let html_render = render::render(&merged_commit_count, since, until, &repos, &repo_totals);
 
     fs::write(&args.output, html_render)
         .with_context(|| format!("falha ao escrever {}", args.output.display()))?;
@@ -62,20 +60,14 @@ fn run_stats(
     since: NaiveDate,
     until: NaiveDate,
 ) -> Result<()> {
-    let mut author_commit_total: BTreeMap<
-        (String, String), (u32, u64, u64)
-    > = BTreeMap::new();
+    let mut author_commit_total: BTreeMap<(String, String), (u32, u64, u64)> = BTreeMap::new();
 
     for repo in repos {
-        let author_stats = commit::author_stats(
-            repo, since, until, &args.authors
-        )?;
+        let author_stats = commit::author_stats(repo, since, until, &args.authors)?;
 
         for (email, name, commit_count, add, del) in author_stats {
             if args.verbose {
-                eprintln!(
-                    "  {commit_count:>6}  {name} <{email}>"
-                );
+                eprintln!("  {commit_count:>6}  {name} <{email}>");
             }
             let author_total = author_commit_total
                 .entry((email, name))
@@ -92,23 +84,22 @@ fn run_stats(
         .map(|((e, n), (c, a, d))| (e, n, c, a, d))
         .collect();
 
-    sorted_author_stats.sort_by(
-        |a, b| b.2.cmp(&a.2).then_with(|| a.0.cmp(&b.0))
-    );
+    sorted_author_stats.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| a.0.cmp(&b.0)));
 
-    let total_commits: u32 = sorted_author_stats
-        .iter()
-        .map(|(_, _, c, _, _)| c)
-        .sum();
+    let total_commits: u32 = sorted_author_stats.iter().map(|(_, _, c, _, _)| c).sum();
 
     let email_width = calculate_column_width(
-        sorted_author_stats.iter().map(|(e, _, _, _, _)| display_width(e)),
+        sorted_author_stats
+            .iter()
+            .map(|(e, _, _, _, _)| display_width(e)),
         display_width("email"),
         60,
     );
 
     let name_width = calculate_column_width(
-        sorted_author_stats.iter().map(|(_, n, _, _, _)| display_width(n)),
+        sorted_author_stats
+            .iter()
+            .map(|(_, n, _, _, _)| display_width(n)),
         display_width("name"),
         60,
     );
@@ -195,10 +186,7 @@ fn pad_or_truncate(text: &str, column_width: usize) -> String {
     } else {
         let truncated_width = column_width.saturating_sub(1);
 
-        let mut truncated_text: String = text
-            .chars()
-            .take(truncated_width)
-            .collect();
+        let mut truncated_text: String = text.chars().take(truncated_width).collect();
 
         truncated_text.push('…');
 

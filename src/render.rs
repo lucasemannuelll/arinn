@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::path::PathBuf;
 
+use crate::commit::RepoStat;
 use chrono::{Datelike, Duration, NaiveDate};
-use crate::commit::{RepoStat};
 
 const CELL_SIZE: i32 = 11;
 const GAP_SIZE: i32 = 2;
@@ -27,15 +27,10 @@ const CONTRIBUTION_COLORS: [&str; 5] = [
     "#39d353", // 20+
 ];
 
-const WEEKDAYS_LABELS: [(usize, &str); 3] = [
-    (1, "Mon"), (3, "Wed"), (5, "Fri")
-];
+const WEEKDAYS_LABELS: [(usize, &str); 3] = [(1, "Mon"), (3, "Wed"), (5, "Fri")];
 
 const MONTHS: [&str; 12] = [
-    "Jan", "Feb", "Mar", 
-    "Apr", "May", "Jun", 
-    "Jul", "Aug", "Sep", 
-    "Oct", "Nov", "Dec",
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
 pub fn render(
@@ -45,18 +40,13 @@ pub fn render(
     repos: &[PathBuf],
     repo_totals: &BTreeMap<String, RepoStat>,
 ) -> String {
-    let grid_start_date = since - Duration::days(
-        since.weekday().num_days_from_sunday() as i64
-    );
+    let grid_start_date = since - Duration::days(since.weekday().num_days_from_sunday() as i64);
 
-    let days_until_saturday = 6 - until
-        .weekday()
-        .num_days_from_sunday() as i64;
+    let days_until_saturday = 6 - until.weekday().num_days_from_sunday() as i64;
 
     let grid_end_date = until + Duration::days(days_until_saturday);
 
-    let grid_total_days = (grid_end_date - grid_start_date)
-        .num_days() as i32 + 1;
+    let grid_total_days = (grid_end_date - grid_start_date).num_days() as i32 + 1;
 
     let week_count = (grid_total_days + 6) / 7;
 
@@ -117,9 +107,7 @@ rect.cell:hover {{
 
     svg_content.push_str("</svg>\n");
 
-    let total_commits: u32 = daily_commit_count
-        .values()
-        .sum();
+    let total_commits: u32 = daily_commit_count.values().sum();
 
     let repos_html = render_repos_panel(repos, repo_totals);
 
@@ -193,10 +181,7 @@ fn html_escape(input: &str) -> String {
     escaped
 }
 
-fn render_repos_panel(
-    repos: &[PathBuf],
-    repo_totals: &BTreeMap<String, RepoStat>,
-) -> String {
+fn render_repos_panel(repos: &[PathBuf], repo_totals: &BTreeMap<String, RepoStat>) -> String {
     if repos.is_empty() {
         return String::new();
     }
@@ -230,9 +215,7 @@ fn render_repos_panel(
 
                 format!(
                     " — {} {commit_label}, <span class=\"diff\">+{}/−{}</span>",
-                    repo_stat.commits,
-                    repo_stat.insertions,
-                    repo_stat.deletions
+                    repo_stat.commits, repo_stat.insertions, repo_stat.deletions
                 )
             })
             .unwrap_or_default();
@@ -266,9 +249,7 @@ fn contribution_level(commit_count: u32) -> usize {
     }
 }
 
-fn draw_month_labels(
-    svg_content: &mut String, grid_start_date: NaiveDate, week_count: i32
-) {
+fn draw_month_labels(svg_content: &mut String, grid_start_date: NaiveDate, week_count: i32) {
     let mut previous_month: Option<u32> = None;
     for week in 0..week_count {
         let week_start_date = grid_start_date + Duration::days((week * 7) as i64);
@@ -396,9 +377,7 @@ fn draw_footer(
     daily_commit_count: &BTreeMap<NaiveDate, u32>,
     svg_height: i32,
 ) {
-    let total_commits: u32 = daily_commit_count
-        .values()
-        .sum();
+    let total_commits: u32 = daily_commit_count.values().sum();
 
     let footer_text = format!("{since} → {until} · {total_commits} commits");
     let footer_x = MARGIN_LEFT;

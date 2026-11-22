@@ -61,17 +61,13 @@ pub fn read_commits(
 
     let commits: Vec<Commit> = parse_log_output(repo, &stdout)
         .into_iter()
-        .filter(|commit| {
-            commit.commit_date >= since && commit.commit_date <= until
-        })
+        .filter(|commit| commit.commit_date >= since && commit.commit_date <= until)
         .collect();
 
     Ok(commits)
 }
 
-fn run_log(
-    repo: &Path, since: NaiveDate, until: NaiveDate, authors: &[String]
-) -> Result<String> {
+fn run_log(repo: &Path, since: NaiveDate, until: NaiveDate, authors: &[String]) -> Result<String> {
     let mut git_cmd = Command::new("git");
     git_cmd
         .arg("-C")
@@ -90,15 +86,11 @@ fn run_log(
 
     let cmd_output = git_cmd
         .output()
-        .with_context(|| format!(
-            "falha ao invocar git em {}", repo.display())
-        )?;
+        .with_context(|| format!("falha ao invocar git em {}", repo.display()))?;
 
     if !cmd_output.status.success() {
         let stderr = String::from_utf8_lossy(&cmd_output.stderr);
-        eprintln!(
-            "git log falhou em {}: {}", repo.display(), stderr.trim()
-        );
+        eprintln!("git log falhou em {}: {}", repo.display(), stderr.trim());
         return Ok(String::new());
     }
 
@@ -122,10 +114,7 @@ fn parse_commit_line(line: &str) -> Result<Commit> {
         commit_time: parsed_date.naive_local(),
         hash,
         message,
-        parents: parents
-            .split_whitespace()
-            .map(str::to_string)
-            .collect(),
+        parents: parents.split_whitespace().map(str::to_string).collect(),
         insertions: 0,
         deletions: 0,
     })
@@ -155,14 +144,10 @@ fn parse_log_output(repo: &Path, stdout: &str) -> Vec<Commit> {
             match parse_commit_line(trimmed_line) {
                 Ok(commit) => commits.push(commit),
                 Err(e) => {
-                    eprintln!(
-                        "linha de commit inválida em {}: {e}",repo.display()
-                    );
+                    eprintln!("linha de commit inválida em {}: {e}", repo.display());
                 }
             }
-        } else if let Some((insertions, deletions)) =
-            parse_numstat_line(trimmed_line)
-        {
+        } else if let Some((insertions, deletions)) = parse_numstat_line(trimmed_line) {
             if let Some(last_commit) = commits.last_mut() {
                 last_commit.insertions += insertions;
                 last_commit.deletions += deletions;
@@ -181,13 +166,10 @@ pub fn author_stats(
 ) -> Result<Vec<(String, String, u32, u64, u64)>> {
     let stdout = run_log(repo, since, until, authors)?;
 
-    let mut author_totals: BTreeMap<
-        (String, String), (u32, u64, u64)
-    > = BTreeMap::new();
+    let mut author_totals: BTreeMap<(String, String), (u32, u64, u64)> = BTreeMap::new();
 
     for commit in parse_log_output(repo, &stdout) {
-        if commit.commit_date >= since
-            && commit.commit_date <= until {
+        if commit.commit_date >= since && commit.commit_date <= until {
             // merges não somam linhas
             let lines = if commit.is_merge() {
                 (0, 0)
@@ -206,9 +188,7 @@ pub fn author_stats(
     }
     let mut author_stats: Vec<_> = author_totals
         .into_iter()
-        .map(|((email, name), (commit_count, add, del))| {
-            (email, name, commit_count, add, del)
-        })
+        .map(|((email, name), (commit_count, add, del))| (email, name, commit_count, add, del))
         .collect();
 
     author_stats.sort_by(|a, b| b.2.cmp(&a.2));
@@ -216,9 +196,7 @@ pub fn author_stats(
     Ok(author_stats)
 }
 
-pub fn repo_day_stats(
-    commits: &[Commit],
-) -> BTreeMap<NaiveDate, RepoStat> {
+pub fn repo_day_stats(commits: &[Commit]) -> BTreeMap<NaiveDate, RepoStat> {
     let mut day_stats: BTreeMap<NaiveDate, RepoStat> = BTreeMap::new();
     for commit in commits {
         let repo_stat = day_stats.entry(commit.commit_date).or_default();
@@ -241,23 +219,19 @@ pub fn repo_day_stats(
 }
 
 pub fn merge_day_buckets(
-    repo_day_stats: impl IntoIterator<
-        Item = (String, BTreeMap<NaiveDate, RepoStat>)
-    >,
+    repo_day_stats: impl IntoIterator<Item = (String, BTreeMap<NaiveDate, RepoStat>)>,
 ) -> Vec<DayBucket> {
     let mut day_buckets: BTreeMap<NaiveDate, DayBucket> = BTreeMap::new();
 
     for (repo_name, day_stats) in repo_day_stats {
         for (date, repo_stat) in day_stats {
-            let bucket = day_buckets
-                .entry(date)
-                .or_insert_with(|| DayBucket {
-                    date,
-                    total_commits: 0,
-                    total_insertions: 0,
-                    total_deletions: 0,
-                    per_repo: BTreeMap::new(),
-                });
+            let bucket = day_buckets.entry(date).or_insert_with(|| DayBucket {
+                date,
+                total_commits: 0,
+                total_insertions: 0,
+                total_deletions: 0,
+                per_repo: BTreeMap::new(),
+            });
 
             bucket.total_commits += repo_stat.commits;
             bucket.total_insertions += repo_stat.insertions;
@@ -269,9 +243,7 @@ pub fn merge_day_buckets(
     day_buckets.into_values().collect()
 }
 
-pub fn total_by_day(
-    day_buckets: &[DayBucket],
-) -> BTreeMap<NaiveDate, u32> {
+pub fn total_by_day(day_buckets: &[DayBucket]) -> BTreeMap<NaiveDate, u32> {
     day_buckets
         .iter()
         .map(|bucket| (bucket.date, bucket.total_commits))
@@ -286,7 +258,8 @@ pub fn totals_by_repo(day_buckets: &[DayBucket]) -> BTreeMap<String, RepoStat> {
             total.commits += repo_stat.commits;
             total.insertions += repo_stat.insertions;
             total.deletions += repo_stat.deletions;
-            total.commits_detail
+            total
+                .commits_detail
                 .extend(repo_stat.commits_detail.iter().cloned());
         }
     }

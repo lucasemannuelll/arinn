@@ -41,10 +41,10 @@ pub fn parse() -> Args {
 }
 
 pub fn resolve_window(args: &Args) -> (NaiveDate, NaiveDate) {
-    let until = args.until
-        .unwrap_or_else(|| Local::now().date_naive());
+    let until = args.until.unwrap_or_else(|| Local::now().date_naive());
 
-    let since = args.since
+    let since = args
+        .since
         .unwrap_or_else(|| until - chrono::Duration::days(365));
 
     (since, until)
