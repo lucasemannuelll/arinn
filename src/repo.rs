@@ -14,7 +14,9 @@ pub fn normalize_path(raw_path: &str) -> Option<PathBuf> {
     let mut normalized_path = PathBuf::from(trimmed_path);
 
     if normalized_path.file_name().and_then(|s| s.to_str()) == Some(".git") {
-        normalized_path = normalized_path.parent()?.to_path_buf();
+        normalized_path = normalized_path
+            .parent()?
+            .to_path_buf();
     }
 
     if !normalized_path.is_dir() {
