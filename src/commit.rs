@@ -24,7 +24,6 @@ impl Commit {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct CommitRef {
     pub hash: String,

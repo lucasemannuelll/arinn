@@ -7,17 +7,14 @@ mod repo;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::IsTerminal;
-use std::path::PathBuf;
-
-use chrono::NaiveDate;
 
 use anyhow::{Context, Result};
+use chrono::NaiveDate;
 
 fn main() -> Result<()> {
     let args = cli::parse();
 
     let stdin_is_pipe = !std::io::stdin().is_terminal();
-
     let repos = input::resolve_paths(&args, stdin_is_pipe)?;
 
     if repos.is_empty() {
@@ -38,13 +35,26 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let repo_day_stats = Vec::new();
+    let mut repo_day_stats = Vec::new();
+
+    for repo in &repos {
+        let commits = commit::read_commits(repo, since, until, &args.authors)?;
+
+        if args.verbose {
+            eprintln!("  {} commits", commits.len());
+        }
+
+        let repo_name = repo
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| repo.display().to_string());
+
+        repo_day_stats.push((repo_name, commit::repo_day_stats(&commits)));
+    }
 
     let day_buckets = commit::merge_day_buckets(repo_day_stats);
-    let merged_commit_count = commit::total_by_day(&day_buckets);
-    let repo_totals = commit::totals_by_repo(&day_buckets);
 
-    let html_render = render::render(&merged_commit_count, since, until, &repos, &repo_totals);
+    let html_render = render::render(&day_buckets, since, until, &repos);
 
     fs::write(&args.output, html_render)
         .with_context(|| format!("falha ao escrever {}", args.output.display()))?;
@@ -56,7 +66,7 @@ fn main() -> Result<()> {
 
 fn run_stats(
     args: &cli::Args,
-    repos: &[PathBuf],
+    repos: &[std::path::PathBuf],
     since: NaiveDate,
     until: NaiveDate,
 ) -> Result<()> {

@@ -2,8 +2,9 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::path::PathBuf;
 
-use crate::commit::RepoStat;
 use chrono::{Datelike, Duration, NaiveDate};
+
+use crate::commit::{total_by_day, totals_by_repo, DayBucket, RepoStat};
 
 const CELL_SIZE: i32 = 11;
 const GAP_SIZE: i32 = 2;
@@ -34,16 +35,19 @@ const MONTHS: [&str; 12] = [
 ];
 
 pub fn render(
-    daily_commit_count: &BTreeMap<NaiveDate, u32>,
+    day_buckets: &[DayBucket],
     since: NaiveDate,
     until: NaiveDate,
     repos: &[PathBuf],
-    repo_totals: &BTreeMap<String, RepoStat>,
 ) -> String {
+    let daily_commit_count = total_by_day(day_buckets);
+    let repo_totals = totals_by_repo(day_buckets);
+
+    let daily_commit_count = &daily_commit_count;
+    let repo_totals = &repo_totals;
+
     let grid_start_date = since - Duration::days(since.weekday().num_days_from_sunday() as i64);
-
     let days_until_saturday = 6 - until.weekday().num_days_from_sunday() as i64;
-
     let grid_end_date = until + Duration::days(days_until_saturday);
 
     let grid_total_days = (grid_end_date - grid_start_date).num_days() as i32 + 1;
@@ -111,6 +115,10 @@ rect.cell:hover {{
 
     let repos_html = render_repos_panel(repos, repo_totals);
 
+    let panel_css = PANEL_CSS;
+    let panel_js = PANEL_JS;
+    let data_script_html = render_data_script(day_buckets);
+
     format!(
         r##"<!DOCTYPE html>
 <html lang="en">
@@ -155,16 +163,224 @@ rect.cell:hover {{
   }}
   .repos li .diff {{ color: {FG}; }}
   .wrap {{ display: inline-block; }}
+{panel_css}
 </style>
 </head>
 <body>
   <h1>arinn — {total_commits} commits</h1>
   {repos_html}<div class="wrap">{svg_content}</div>
+  {data_script_html}
+  <aside id="arinn-panel" aria-hidden="true">
+    <div class="panel-head">
+      <div class="panel-title" id="arinn-panel-title"></div>
+      <button id="arinn-panel-close" title="Fechar">×</button>
+    </div>
+    <div id="arinn-panel-body"></div>
+  </aside>
+  <script>
+{panel_js}
+  </script>
 </body>
 </html>
 "##
     )
 }
+
+/// Cores do painel lateral (mesma paleta dark do heatmap).
+const PANEL_CSS: &str = r##"
+  rect.cell.has-commits { cursor: pointer; }
+  rect.cell.active { stroke: #ffffff; stroke-width: 1.5; }
+  #arinn-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: 380px;
+    max-width: 90vw;
+    background: #161b22;
+    border-left: 1px solid #30363d;
+    padding: 0 16px 16px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    z-index: 10;
+    font-size: 13px;
+    transform: translateX(100%);
+    visibility: hidden;
+    transition: transform .15s ease, visibility .15s;
+  }
+  #arinn-panel.open {
+    transform: translateX(0);
+    visibility: visible;
+  }
+  .panel-head {
+    position: sticky;
+    top: 0;
+    background: #161b22;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 14px 0 10px;
+    border-bottom: 1px solid #30363d;
+    margin-bottom: 10px;
+  }
+  .panel-title {
+    font-weight: 600;
+    color: #c9d1d9;
+    text-transform: capitalize;
+  }
+  #arinn-panel-close {
+    background: none;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    border-radius: 6px;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  #arinn-panel-close:hover { color: #c9d1d9; border-color: #8b949e; }
+  .panel-total { color: #8b949e; margin: 0 0 12px; }
+  .repo-sub {
+    font-weight: 600;
+    color: #c9d1d9;
+    margin: 12px 0 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #21262d;
+  }
+  .repo-lines { color: #8b949e; font-weight: 400; font-size: 12px; }
+  .commit-row {
+    display: flex;
+    gap: 8px;
+    padding: 2px 0;
+    font-size: 12px;
+    color: #c9d1d9;
+  }
+  .commit-time {
+    color: #8b949e;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    flex-shrink: 0;
+  }
+  .commit-hash {
+    color: #8b949e;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    flex-shrink: 0;
+  }
+  .commit-msg { overflow-wrap: anywhere; }
+  .commit-more {
+    color: #8b949e;
+    font-size: 12px;
+    font-style: italic;
+    padding: 4px 0;
+  }
+"##;
+
+const PANEL_JS: &str = r##"(function () {
+  var data_element = document.getElementById('arinn-data');
+  var panel = document.getElementById('arinn-panel');
+  if (!data_element || !panel) return;
+
+  var buckets = {};
+  JSON.parse(data_element.textContent).forEach(function (bucket) {
+    buckets[bucket.date] = bucket;
+  });
+
+  var title_element = document.getElementById('arinn-panel-title');
+  var body_element = document.getElementById('arinn-panel-body');
+  var close_button = document.getElementById('arinn-panel-close');
+  var active_cell = null;
+
+  function esc(text) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function truncate(text, max_length) {
+    return text.length > max_length
+      ? text.slice(0, max_length) + '…'
+      : text;
+  }
+
+  function close() {
+    panel.classList.remove('open');
+    panel.setAttribute('aria-hidden', 'true');
+    if (active_cell) {
+      active_cell.classList.remove('active');
+      active_cell = null;
+    }
+  }
+
+  function open(bucket) {
+    var commit_label = bucket.total_commits === 1 ? 'commit' : 'commits';
+    var html = '<div class="panel-total">' +
+      bucket.total_commits + ' ' + commit_label + ' · +' +
+      bucket.total_insertions + '/−' + bucket.total_deletions +
+      '</div>';
+
+    Object.keys(bucket.per_repo).forEach(function (repo_name) {
+      var repo_stat = bucket.per_repo[repo_name];
+      html += '<div class="repo-sub">' + esc(repo_name) +
+        ' <span class="repo-lines">+' + repo_stat.insertions +
+        '/−' + repo_stat.deletions + '</span></div>';
+
+      repo_stat.commits_detail.slice(0, 50).forEach(function (commit) {
+        html += '<div class="commit-row">' +
+          '<span class="commit-time">' + esc(commit.time) + '</span>' +
+          '<span class="commit-hash">' + esc(commit.hash.slice(0, 7)) + '</span>' +
+          '<span class="commit-msg">' + esc(truncate(commit.message, 120)) + '</span>' +
+          '</div>';
+      });
+
+      var remaining = repo_stat.commits_detail.length - 50;
+      if (remaining > 0) {
+        html += '<div class="commit-more">+' + remaining + ' commits restantes</div>';
+      }
+    });
+
+    title_element.textContent = new Date(bucket.date + 'T00:00:00')
+      .toLocaleDateString(undefined, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    body_element.innerHTML = html;
+    panel.setAttribute('aria-hidden', 'false');
+    panel.classList.add('open');
+  }
+
+  close_button.addEventListener('click', close);
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') close();
+  });
+
+  document.addEventListener('click', function (event) {
+    if (!panel.classList.contains('open')) return;
+    if (panel.contains(event.target)) return;
+    if (event.target.classList && event.target.classList.contains('cell')) return;
+    close();
+  });
+
+  Array.prototype.forEach.call(
+    document.querySelectorAll('rect.cell.has-commits'),
+    function (cell) {
+      cell.addEventListener('click', function (event) {
+        event.stopPropagation();
+        if (active_cell) active_cell.classList.remove('active');
+        active_cell = cell;
+        cell.classList.add('active');
+        var bucket = buckets[cell.getAttribute('data-date')];
+        if (bucket) open(bucket);
+      });
+    }
+  );
+})();"##;
 
 fn html_escape(input: &str) -> String {
     let mut escaped = String::with_capacity(input.len());
@@ -316,9 +532,17 @@ fn draw_cells(
                 "commits"
             };
 
+            // Dias com commits > 0 são clicáveis (painel lateral);
+            // dias vazios não recebem data nem classe de clique.
+            let cell_class = if commit_count > 0 {
+                format!(r#" class="cell has-commits" data-date="{current_date}""#)
+            } else {
+                r#" class="cell""#.to_string()
+            };
+
             writeln!(
                 svg_content,
-                r##"<rect class="cell" x="{cell_x}" y="{cell_y}" width="{CELL_SIZE}" height="{CELL_SIZE}" rx="2" ry="2" fill="{cell_color}"><title>{commit_count} {commit_label} em {current_date}</title></rect>"##
+                r##"<rect{cell_class} x="{cell_x}" y="{cell_y}" width="{CELL_SIZE}" height="{CELL_SIZE}" rx="2" ry="2" fill="{cell_color}"><title>{commit_count} {commit_label} em {current_date}</title></rect>"##
             ).unwrap();
         } else {
             writeln!(
@@ -378,7 +602,6 @@ fn draw_footer(
     svg_height: i32,
 ) {
     let total_commits: u32 = daily_commit_count.values().sum();
-
     let footer_text = format!("{since} → {until} · {total_commits} commits");
     let footer_x = MARGIN_LEFT;
     let footer_y = svg_height - 6;
@@ -388,4 +611,91 @@ fn draw_footer(
         r##"<text x="{footer_x}" y="{footer_y}" fill="{FG_MUTED}">{footer_text}</text>"##
     )
     .unwrap();
+}
+
+/// Embute os DayBuckets como JSON em `<script type="application/json">`
+/// para o JS do painel lateral. O HTML continua 100% auto-contido
+/// (sem servidor, sem fetch, funcional offline).
+fn render_data_script(day_buckets: &[DayBucket]) -> String {
+    if day_buckets.is_empty() {
+        return String::new();
+    }
+
+    let mut json = String::from("[");
+
+    for (i, bucket) in day_buckets.iter().enumerate() {
+        if i > 0 {
+            json.push(',');
+        }
+
+        json.push_str(&format!(
+            "{{\"date\":\"{}\",\"total_commits\":{},\
+             \"total_insertions\":{},\"total_deletions\":{},\
+             \"per_repo\":{{",
+            bucket.date, bucket.total_commits, bucket.total_insertions, bucket.total_deletions
+        ));
+
+        for (j, (repo_name, repo_stat)) in bucket.per_repo.iter().enumerate() {
+            if j > 0 {
+                json.push(',');
+            }
+
+            json.push_str(&format!(
+                "\"{}\":{{\"commits\":{},\"insertions\":{},\
+                 \"deletions\":{},\"commits_detail\":[",
+                json_escape(repo_name),
+                repo_stat.commits,
+                repo_stat.insertions,
+                repo_stat.deletions
+            ));
+
+            for (k, commit_ref) in repo_stat.commits_detail.iter().enumerate() {
+                if k > 0 {
+                    json.push(',');
+                }
+
+                json.push_str(&format!(
+                    "{{\"hash\":\"{}\",\"time\":\"{}\",\
+                     \"message\":\"{}\",\"author_email\":\"{}\",\
+                     \"author_name\":\"{}\"}}",
+                    json_escape(&commit_ref.hash),
+                    json_escape(&commit_ref.time),
+                    json_escape(&commit_ref.message),
+                    json_escape(&commit_ref.author_email),
+                    json_escape(&commit_ref.author_name)
+                ));
+            }
+
+            json.push_str("]}");
+        }
+
+        json.push_str("}}");
+    }
+
+    json.push(']');
+
+    format!(r##"<script type="application/json" id="arinn-data">{json}</script>"##)
+}
+
+/// Escapa uma string para embutir em JSON dentro de um `<script>`:
+/// aspas, barras e controles viram sequências `\u…`; `<` e `>` viram
+/// `\u003c`/`\u003e` para impedir fechamento antecipado da tag.
+fn json_escape(input: &str) -> String {
+    let mut escaped = String::with_capacity(input.len());
+    for char in input.chars() {
+        match char {
+            '"' => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            '<' => escaped.push_str("\\u003c"),
+            '>' => escaped.push_str("\\u003e"),
+            c if (c as u32) < 0x20 => {
+                let _ = write!(escaped, "\\u{:04x}", c as u32);
+            }
+            c => escaped.push(c),
+        }
+    }
+    escaped
 }
