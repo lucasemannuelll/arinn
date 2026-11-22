@@ -26,9 +26,15 @@ const CONTRIBUTION_COLORS: [&str; 5] = [
     "#39d353", // 20+
 ];
 
-const WEEKDAYS_LABELS: [(usize, &str); 3] = [(1, "Mon"), (3, "Wed"), (5, "Fri")];
+const WEEKDAYS_LABELS: [(usize, &str); 3] = [
+    (1, "Mon"), (3, "Wed"), (5, "Fri")
+];
+
 const MONTHS: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    "Jan", "Feb", "Mar", 
+    "Apr", "May", "Jun", 
+    "Jul", "Aug", "Sep", 
+    "Oct", "Nov", "Dec",
 ];
 
 pub fn render(
@@ -37,11 +43,16 @@ pub fn render(
     until: NaiveDate,
     repos: &[PathBuf],
 ) -> String {
-    let grid_start_date = since - Duration::days(since.weekday().num_days_from_sunday() as i64);
-    let days_until_saturday = 6 - until.weekday().num_days_from_sunday() as i64;
+    let grid_start_date = since - Duration::days(
+        since.weekday().num_days_from_sunday() as i64
+    );
+    let days_until_saturday = 6 - until
+        .weekday()
+        .num_days_from_sunday() as i64;
     let grid_end_date = until + Duration::days(days_until_saturday);
 
-    let grid_total_days = (grid_end_date - grid_start_date).num_days() as i32 + 1;
+    let grid_total_days = (grid_end_date - grid_start_date)
+        .num_days() as i32 + 1;
 
     let week_count = (grid_total_days + 6) / 7;
 
@@ -93,11 +104,7 @@ rect.cell:hover {{
     );
 
     draw_footer(
-        &mut svg_content,
-        since,
-        until,
-        daily_commit_count,
-        svg_height,
+        &mut svg_content, since, until, daily_commit_count, svg_height
     );
 
     svg_content.push_str("</svg>\n");
@@ -227,10 +234,14 @@ fn contribution_level(commit_count: u32) -> usize {
     }
 }
 
-fn draw_month_labels(svg_content: &mut String, grid_start_date: NaiveDate, week_count: i32) {
+fn draw_month_labels(
+    svg_content: &mut String, grid_start_date: NaiveDate, week_count: i32
+) {
     let mut previous_month: Option<u32> = None;
     for week in 0..week_count {
-        let week_start_date = grid_start_date + Duration::days((week * 7) as i64);
+        let week_start_date = grid_start_date + Duration::days(
+            (week * 7) as i64
+        );
 
         let month = week_start_date.month0();
 
@@ -285,7 +296,8 @@ fn draw_cells(
             0
         };
 
-        let cell_color = CONTRIBUTION_COLORS[contribution_level(commit_count)];
+        let cell_color = 
+            CONTRIBUTION_COLORS[contribution_level(commit_count)];
 
         if is_in_date_range {
             let commit_label = if commit_count == 1 {

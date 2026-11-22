@@ -8,7 +8,9 @@ use crate::repo;
 
 /// Decide a fonte (args vs stdin) e
 /// devolve a lista de repos normalizada e deduplicada.
-pub fn resolve_paths(args: &Args, stdin_is_pipe: bool) -> Result<Vec<PathBuf>> {
+pub fn resolve_paths(
+    args: &Args, stdin_is_pipe: bool
+) -> Result<Vec<PathBuf>> {
     let input_paths: Vec<String> = if !args.paths.is_empty() {
         args.paths.iter().map(|p| p.display().to_string()).collect()
     } else if stdin_is_pipe {
@@ -26,16 +28,22 @@ pub fn resolve_paths(args: &Args, stdin_is_pipe: bool) -> Result<Vec<PathBuf>> {
             Some(repo) => {
                 if !repo::is_git_repo(&repo) {
                     eprintln!(
-                        "aviso: {} não parece um repositório git; ignorando",
+                        "{} não parece um repositório git; ignorando",
                         repo.display()
                     );
                     continue;
                 }
-                let canonical_path = repo.canonicalize().unwrap_or(repo.clone());
+                let canonical_path = repo
+                    .canonicalize()
+                    .unwrap_or(repo.clone());
 
                 if !resolved_paths
                     .iter()
-                    .any(|e| e.canonicalize().ok().as_ref() == Some(&canonical_path))
+                    .any(
+                        |e| e.canonicalize()
+                        .ok()
+                        .as_ref() == Some(&canonical_path)
+                    )
                 {
                     resolved_paths.push(repo);
                 }
@@ -43,7 +51,9 @@ pub fn resolve_paths(args: &Args, stdin_is_pipe: bool) -> Result<Vec<PathBuf>> {
             None => {
                 let trimmed_path = input_path.trim();
                 if !trimmed_path.is_empty() {
-                    eprintln!("aviso: caminho inválido ou inexistente: {trimmed_path}");
+                    eprintln!(
+                        "caminho inválido ou inexistente: {trimmed_path}"
+                    );
                 }
             }
         }
