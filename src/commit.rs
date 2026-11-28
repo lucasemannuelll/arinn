@@ -1,10 +1,25 @@
+// BTreeMap é um dicionario, ou seja uma mapa de chave -> valor
+// com as chaves ordenadas automaticamente
 use std::collections::BTreeMap;
+
+// representa um unico caminho de arquivo/dir
 use std::path::Path;
+
+// permite executar programas externos
 use std::process::Command;
 
+// tratamento de erros mais simples
+// Result simplifica a assinatura das funções e Context permite
+// adicionar mensagens explicativas aos erros.
 use anyhow::{Context, Result};
+
+// mesma coisa de cli.rs
 use chrono::{DateTime, NaiveDate, NaiveDateTime};
 
+
+// uma estrutura simples que representa um commit do git
+// Debug permite a printar o struct em caso de depuracao
+// Clone permite clonar o struct
 #[derive(Debug, Clone)]
 pub struct Commit {
     pub email: String,
@@ -18,12 +33,20 @@ pub struct Commit {
     pub deletions: u64,
 }
 
+
+// isso adiciona um metodo ao struct, podendo agora chamar esse metodo
+// &self recebe uma referencia de Commit, entao ele nao copia, nao consome
+// e nao modifica, e por isso pode ser chamado varias vezes
 impl Commit {
+
+    // em git um commit merge tem mais de um pai, o da branch original e o do branch destino
+    // 'parents' guarda o hash do pai, se houver mais que 1, ele retorna true
     pub fn is_merge(&self) -> bool {
         self.parents.len() > 1
     }
 }
 
+// basicamente uma versao resumida do repo
 #[derive(Debug, Clone)]
 pub struct CommitRef {
     pub hash: String,
@@ -41,6 +64,7 @@ pub struct RepoStat {
     pub commits_detail: Vec<CommitRef>,
 }
 
+// total de commits em um dado dia em todos os repos
 #[derive(Debug, Clone)]
 pub struct DayBucket {
     pub date: NaiveDate,
@@ -56,18 +80,27 @@ pub fn read_commits(
     until: NaiveDate,
     authors: &[String],
 ) -> Result<Vec<Commit>> {
+    // '?'' faz com que se Result retornar Ok(valor) ele so atribui a variavel
+    // mas se retornar Err(valor), a funcao é interrompida
     let stdout = run_log(repo, since, until, authors)?;
 
+    // into_iter itera valor a valor
+    // usa .filter(), uma clojure filtrea apenas aqueles que seguem a condicao
+    // |commit| recebe uma referencia ao um commit individual
+    // e mantem apenas commits que estao no intervalo de [since -> until]
+    // .collect retorna a colecao Vec<Commit> preenchida
     let commits: Vec<Commit> = parse_log_output(repo, &stdout)
         .into_iter()
         .filter(|commit| commit.commit_date >= since && commit.commit_date <= until)
         .collect();
 
+    // sucesso
     Ok(commits)
 }
 
 fn run_log(repo: &Path, since: NaiveDate, until: NaiveDate, authors: &[String]) -> Result<String> {
     let mut git_cmd = Command::new("git");
+
     git_cmd
         .arg("-C")
         .arg(repo)
@@ -78,15 +111,36 @@ fn run_log(repo: &Path, since: NaiveDate, until: NaiveDate, authors: &[String]) 
         .arg("-M")
         .arg("--numstat")
         .arg("--pretty=format:%aE%x1f%aN%x1f%aI%x1f%H%x1f%P%x1f%s");
+        // Campos:
+        //   %aE = author email
+        //   %aN = author name
+        //   %aI = author date (ISO 8601)
+        //   %H  = hash completo
+        //   %P  = parent hashes (separados por espaço)
+        //   %s  = subject (primeira linha da mensagem)
 
+
+    // Adiciona um filtro por autor. Repetível: vira OR.
     for author in authors {
         git_cmd.arg(format!("--author={author}"));
     }
 
-    let cmd_output = git_cmd
+    // .output executa git_cmd, espera terminar e captura stdout, stderr e status code
+    // se o Result for Ok(...), passa o valor a adiante
+    // mas Result for Err(...) chama a clojure e exibe a mensagem de erro 
+    // e retorna o lugar onde foi rodado
+    // isso é pra quando git sequer consegue ser executado
+    let cmd_output = git_cmd 
         .output()
         .with_context(|| format!("falha ao invocar git em {}", repo.display()))?;
 
+    // checa o status code de cmd_output é 0
+    // from_utf8_lossy sempre retorna algo imprimivel
+    // ou seja da para saber oq deu erro
+    // eprintln imprime em stderr
+    // return Ok(...) usa uma string vazia ou seja nao é consirado um erro,
+    // ele retorna para quem chamou Ok("") e isso faz com que o chamador nao
+    // saiba que houve um erro e so passa para o proximo repo
     if !cmd_output.status.success() {
         let stderr = String::from_utf8_lossy(&cmd_output.stderr);
         eprintln!("git log falhou em {}: {}", repo.display(), stderr.trim());
@@ -97,14 +151,19 @@ fn run_log(repo: &Path, since: NaiveDate, until: NaiveDate, authors: &[String]) 
 }
 
 fn parse_commit_line(line: &str) -> Result<Commit> {
+    // Usa 'splitn(6, '\x1f')' em vez de 'split' para limitar a 6 partes: assim, se a mensagem
+    // do commit contiver o caractere '\x1f', ele não quebra a mensagem em campos extras.
     let mut fields = line.splitn(6, '\x1f');
+
     let email = fields.next().context("email ausente")?.to_string();
     let name = fields.next().context("name ausente")?.to_string();
     let commit_date = fields.next().context("data ausente")?;
     let hash = fields.next().context("hash ausente")?.to_string();
     let parents = fields.next().context("parents ausente")?.to_string();
     let message = fields.next().context("mensagem ausente")?.to_string();
+
     let parsed_date = DateTime::parse_from_rfc3339(commit_date)?;
+
 
     Ok(Commit {
         email,
@@ -119,11 +178,21 @@ fn parse_commit_line(line: &str) -> Result<Commit> {
     })
 }
 
+// retorna Option<(u64, u64)> porque uma linha
+// inválida ou sem números não deve quebrar o programa, apenas sinalizar ausência de dados.
 fn parse_numstat_line(line: &str) -> Option<(u64, u64)> {
+    // divide uma linha nos chars de tab, separando insertions e deletions
+    // split() só guarda a posição do separador e
+    // "entrega" cada pedaço sob demanda quando chamamos .next()
     let mut columns = line.split('\t');
+
+    // pede o primeiro campo de columns (insertions)
     let insertions_str = columns.next()?;
+
+    // pede o segundo campo de columns (deletions)
     let deletions_str = columns.next()?;
 
+    // converte os valores acima em numeros
     let insertions = insertions_str.parse().ok()?;
     let deletions = deletions_str.parse().ok()?;
 
@@ -134,26 +203,39 @@ fn parse_log_output(repo: &Path, stdout: &str) -> Vec<Commit> {
     let mut commits = Vec::new();
 
     for line in stdout.lines() {
+
+        // remove espacos em branco extras no comeco e no fim
+        // se a linha estiver vazia simplesmente vai para proxima
         let trimmed_line = line.trim();
         if trimmed_line.is_empty() {
             continue;
         }
 
+        // verifica se a linha contém o caractere \x1f
+        // marcador especial que identifica as linhas que descrevem um commit
         if trimmed_line.contains('\x1f') {
+            // match verifica e conforme o resultado faca:
             match parse_commit_line(trimmed_line) {
+                // se der certo, guarda o commit em commits
                 Ok(commit) => commits.push(commit),
+
+                // diz o repo onde deu erro, mas nao para o processo, só segue em frente
                 Err(e) => {
                     eprintln!("linha de commit inválida em {}: {e}", repo.display());
                 }
             }
+        // se nao tem marcador, entao as insertions e deletions devem estar la
         } else if let Some((insertions, deletions)) = parse_numstat_line(trimmed_line) {
+            // As estatísticas pertencem ao commit mais recente — por isso 'last_mut'.
+            // Somamos em vez de sobrescrever: um commit pode tocar vários arquivos.
+            // Se ainda não há commit na lista, simplesmente ignoramos os números órfãos.
             if let Some(last_commit) = commits.last_mut() {
                 last_commit.insertions += insertions;
                 last_commit.deletions += deletions;
             }
         }
+        // Linhas que não são commit nem numstat são silenciosamente ignoradas.
     }
-
     commits
 }
 
